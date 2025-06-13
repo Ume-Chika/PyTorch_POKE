@@ -30,18 +30,25 @@ if __name__ == "__main__":
             第9世代のポケモン（120件）
     """
     test_id_list  = check_id_usable([each_poke_data['id'] for each_poke_data in poke_data.values() if each_poke_data['generation'] == 9])
+    train_id_list = check_id_usable([each_poke_data['id'] for each_poke_data in poke_data.values() if each_poke_data['generation'] != 9])
 
     # テスト用データセットの作成
     test_dataset = PokeDataset(id_list=test_id_list, poke_data=poke_data)
     test_dataloader = DataLoader(test_dataset, batch_size=5, shuffle=True)
 
+    # 訓練用データセットの作成
+    train_dataset = PokeDataset(id_list=train_id_list, poke_data=poke_data)
+    train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+
     model_select = 'warp'
     if model_select == 'class_balanced':
         from class_balanced_type_predictor import TypePredictor, setting_TypePredictor
+        model = TypePredictor(**setting_TypePredictor)
+        model.load_state_dict(torch.load('model_states/class_balanced.pth'))
     elif model_select == 'warp':
         from warp_type_predictor import TypePredictor, setting_TypePredictor
-    model = TypePredictor(**setting_TypePredictor)
-    model.load_state_dict(torch.load('model_states/class_balanced.pth'))
+        model = TypePredictor(**setting_TypePredictor)
+        model.load_state_dict(torch.load('model_states/warp.pth'))
 
     collect = 0
     data_num = 0
@@ -58,6 +65,7 @@ if __name__ == "__main__":
             plt.show()
         break
 
+    print("--- test with test data --- ")
     # 予測結果の集計
     all_predicted_labels = []
     all_true_labels = []
@@ -65,6 +73,39 @@ if __name__ == "__main__":
     model.eval()
     with torch.no_grad():
         for imgs, labels in test_dataloader:
+            imgs = imgs
+            labels = labels
+            outputs = model(imgs)
+            predicted_probs = torch.sigmoid(outputs)
+            predicted_labels = (predicted_probs > 0.5).float() # スレッショルド0.5で二値化
+
+            all_predicted_labels.append(predicted_labels.cpu())
+            all_true_labels.append(labels.cpu())
+
+        all_predicted_labels = torch.cat(all_predicted_labels, dim=0)
+        all_true_labels = torch.cat(all_true_labels, dim=0)
+
+        # 精度 (Accuracy) の計算例: 各サンプルの全タイプを正しく予測できたか
+        correct_samples = (all_predicted_labels == all_true_labels).all(dim=1).sum().item()
+        total_samples = all_true_labels.size(0)
+        overall_accuracy = correct_samples / total_samples
+        print(f"Overall Accuracy: {overall_accuracy:.4f}")
+
+        # 各タイプごとのF1スコア計算 (scikit-learnを使用)
+        from sklearn.metrics import f1_score
+        f1_micro = f1_score(all_true_labels, all_predicted_labels, average='micro')
+        f1_macro = f1_score(all_true_labels, all_predicted_labels, average='macro')
+        print(f"Micro F1-score: {f1_micro:.4f}")
+        print(f"Macro F1-score: {f1_macro:.4f}\n")
+
+    print("--- test with train data --- ")
+    # 予測結果の集計
+    all_predicted_labels = []
+    all_true_labels = []
+
+    model.eval()
+    with torch.no_grad():
+        for imgs, labels in train_dataloader:
             imgs = imgs
             labels = labels
             outputs = model(imgs)
