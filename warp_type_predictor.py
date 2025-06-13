@@ -46,6 +46,10 @@ setting_TypePredictor = {
 }
 
 if __name__ == "__main__":
+    # CUDAが利用可能であればGPUを使用し、そうでなければCPUを使用
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}") # 使用するデバイスを表示
+
     json_path = 'poke_data.json'
     poke_data = get_poke_data_from_json(json_path)
     """
@@ -84,27 +88,26 @@ if __name__ == "__main__":
     pos_weight = nega_sample/pos_sample
     print(pos_weight)
 
-    model = TypePredictor(**setting_TypePredictor)
+    model = TypePredictor(**setting_TypePredictor).to(device)
 
     learning_rate = 1e-2
     optimizer = torch.optim.AdamW([
-        {'params': model.backbone.parameters(), 'lr': 1e-4},
-        {'params': model.fc.parameters(), 'lr': 1e-3}
+        {'params': model.backbone.parameters(), 'lr': 1e-5},
+        {'params': model.fc.parameters(), 'lr': 1e-2}
     ], weight_decay=1e-3)
-    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight) # バイナリクロスエントロピー with ロジッツ損失
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight.to(device)) # バイナリクロスエントロピー with ロジッツ損失
     # ※ ロジッツは出力層から直接出てくる生の値のことらしい(シグモイドやソフトマックス適応前)
-    n_epochs = 100
+    n_epochs = 5
 
-    # --- ReduceLROnPlateau スケジューラの初期化 ---
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode='min', # 監視対象はテスト損失 (mode='min')
-        factor=0.5, # 学習率を0.5倍にする
-        patience=3, # 3エポック改善がなければ学習率を減衰
-        threshold=1e-2, # 改善されたとみなすライン
-        min_lr=1e-5, # 1e-6: 学習率の下限
-        verbose=True # 学習率が変更されたらメッセージを出力
-    )
+    # # --- ReduceLROnPlateau スケジューラの初期化 ---
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #     optimizer,
+    #     mode='min', # 監視対象はテスト損失 (mode='min')
+    #     factor=0.5, # 学習率を0.5倍にする
+    #     patience=3, # 3エポック改善がなければ学習率を減衰
+    #     threshold=1e-2, # 改善されたとみなすライン
+    #     min_lr=1e-5, # 1e-6: 学習率の下限
+    # )
 
     # ===== 学習フェーズ =====
     i = 0
@@ -116,6 +119,9 @@ if __name__ == "__main__":
         model.train()
         running_train_loss = 0.0
         for imgs, labels in train_dataloader:
+            imgs = imgs.to(device)
+            labels = labels.to(device)
+
             outputs = model(imgs)
             loss = loss_fn(outputs, labels)
 
@@ -129,15 +135,18 @@ if __name__ == "__main__":
         running_test_loss = 0.0
         with torch.no_grad():
             for imgs, labels in test_dataloader:
+                imgs = imgs.to(device)
+                labels = labels.to(device)
+        
                 outputs = model(imgs)
                 loss = loss_fn(outputs, labels)
                 running_test_loss += loss.item()
 
         test_losses.append(running_test_loss / len(test_dataloader))
-        scheduler.step(test_losses[-1])
-        if optimizer.param_groups[0]['lr'] <= 1e-5:
-            print(f"Learning rate has reached its minimum ({1e-5:.6f}). Stopping training.")
-            break # 学習ループを終了
+        # scheduler.step(test_losses[-1])
+        # if optimizer.param_groups[0]['lr'] <= 1e-5:
+        #     print(f"Learning rate has reached its minimum ({1e-5:.6f}). Stopping training.")
+        #     break # 学習ループを終了
 
         pbar.set_description(f'loss | (train, test) = ({float(train_losses[-1]):.2f}, {float(test_losses[-1]):.2f}) lr: {optimizer.param_groups[0]['lr']:.6f}')
 
@@ -150,5 +159,8 @@ if __name__ == "__main__":
     plt.grid(True)
     plt.show()
 
-    PATH = 'model_states/class_balanced.pth'
-    torch.save(model.state_dict(), PATH)
+    PATH = 'model_states/warp.pth'
+    output_dir = os.path.dirname(PATH)
+    if output_dir: # output_dir が空文字列でないことを確認
+        os.makedirs(output_dir, exist_ok=True)
+    torch.save(model.cpu().state_dict(), PATH)
