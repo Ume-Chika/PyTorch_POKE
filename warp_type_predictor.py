@@ -97,7 +97,7 @@ if __name__ == "__main__":
     ], weight_decay=1e-3)
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight.to(device)) # バイナリクロスエントロピー with ロジッツ損失
     # ※ ロジッツは出力層から直接出てくる生の値のことらしい(シグモイドやソフトマックス適応前)
-    n_epochs = 5
+    n_epochs = 50
 
     # # --- ReduceLROnPlateau スケジューラの初期化 ---
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
