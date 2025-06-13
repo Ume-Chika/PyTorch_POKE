@@ -113,6 +113,7 @@ if __name__ == "__main__":
         transforms.RandomResizedCrop((96, 96), scale=(0.8, 1.0)),
         transforms.RandomHorizontalFlip(p=0.5), # RandAugmentに含まれないので残す
         transforms.RandAugment(num_ops=2, magnitude=1), # これを導入。ColorJitter, Rotation, Grayscaleは通常削除
+        transforms.Resize((224, 224)),
         transforms.ToTensor()
     ])
 
