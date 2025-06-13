@@ -1,0 +1,10 @@
+APIからデータ取得→png,jsonへ
+    get_data_from_POKEAPI.py
+    json_and_png_check.py
+データセット作成
+    make_dataset.py
+モデル作成・改良
+    type_predictor.py
+    class_balanced_type_predictor.py
+    utils.py
+    test_models.py
