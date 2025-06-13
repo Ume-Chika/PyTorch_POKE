@@ -38,17 +38,17 @@ def write_poke_dict_to_json(json_path, new_poke_dict):
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(new_poke_dict, f, ensure_ascii=False, indent=4)
 
-def save_image_as_png(image_obj, output_path):
-    """
-    PIL Image オブジェクトをPNGファイルとして保存します。
-    """
-    try:
-        image_obj.save(output_path, format="PNG")
-        print(f"画像を '{output_path}' に保存しました。")
-        return True
-    except Exception as e:
-        print(f"画像の保存中にエラーが発生しました: {e}")
-        return False
+# def save_image_as_png(image_obj, output_path):
+#     """
+#     PIL Image オブジェクトをPNGファイルとして保存します。
+#     """
+#     try:
+#         image_obj.save(output_path, format="PNG")
+#         print(f"画像を '{output_path}' に保存しました。")
+#         return True
+#     except Exception as e:
+#         print(f"画像の保存中にエラーが発生しました: {e}")
+#         return False
 
 def get_poke_data(id):
     try:
@@ -79,6 +79,11 @@ def get_poke_data(id):
         return None
 
 def get_and_save_poke_img(id, image_path, img_show=False):
+    # ファイルパスからディレクトリ部分を抽出
+    output_dir = os.path.dirname(image_path)
+    if output_dir: # output_dir が空文字列でないことを確認
+        os.makedirs(output_dir, exist_ok=True)
+
     try:
         # ep_imgから画像を取得, Tensorへ変換
         response = requests.get(ep_img.replace("{id or name}", str(id)))
@@ -107,13 +112,16 @@ if __name__ == "__main__":
         imgはpng形式で保存される
     """
     poke_data = get_poke_data_from_json(json_path) # すでに保存済みのデータ
-    for id in range(1, 1025+1):
+    print('get poke info from POKEAPI')
+    for id in tqdm(range(1, 1025+1)):
         if not str(id) in poke_data.keys():
             single_poke_data = get_poke_data(id)
             poke_data[str(id)] = single_poke_data
     write_poke_dict_to_json(json_path, poke_data)
+    print('complete!!')
 
-    for id in range(1, 1025+1):
+    print('get poke image from POKEAPI')
+    for id in tqdm(range(1, 1025+1)):
         image_path = f'poke_png/poke_{id}.png'
         if not os.path.exists(image_path):
             get_and_save_poke_img(id, image_path)
